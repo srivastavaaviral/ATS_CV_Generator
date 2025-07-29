@@ -18,6 +18,7 @@ try:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         api_key = st.secrets["GROQ_API_KEY"]
+    api_key = "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"
     client = Groq(api_key=api_key)
 except Exception:
     st.error("Groq API Key not found. Please set it in your .env file or Streamlit secrets.")
@@ -280,20 +281,81 @@ with st.container(border=True):
                     st.session_state.suggested_skills.remove(skill)
                     st.rerun()
 
+def generate_cover_letter(resume_text, job_description):
+    """Generates a cover letter using the Groq API, given resume text and job description."""
+    prompt = f"""
+    You are an expert cover letter writer. Based on the following resume and job description, write a compelling cover letter.
+
+    **Resume:**
+    {resume_text}
+
+    **Job Description:**
+    {job_description}
+
+    **Instructions:**
+    - Focus on how the candidate's skills and experience align with the job requirements.
+    - Use a professional and enthusiastic tone.
+    - Keep the cover letter concise and to the point (around 300-400 words).
+    - Include a strong call to action, inviting the hiring manager to contact the candidate.
+    """
+
+    try:
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama3-70b-8192",
+            temperature=0.7
+        )
+        return chat_completion.choices[0].message.content.strip()
+    except Exception as e:
+        st.error(f"Cover letter generation failed: {e}")
+        return None
+
 
 # --- FINAL GENERATION BUTTON ---
 st.markdown("---")
-if st.button("🚀 Generate Final PDF", type="primary", use_container_width=True):
-    # ... (This logic is the same, no changes needed)
-    with st.spinner("Creating your beautiful CV..."):
-        try:
-            pdf_bytes = create_beautiful_pdf(st.session_state.cv_data)
-            st.download_button(
-                label="📥 Download Your Professional CV",
-                data=pdf_bytes,
-                file_name=f"{data['personal_info'].get('name', 'CV').replace(' ', '_')}_CV.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🚀 Generate Final PDF", type="primary", use_container_width=True):
+        # ... (This logic is the same, no changes needed)
+        with st.spinner("Creating your beautiful CV..."):
+            try:
+                pdf_bytes = create_beautiful_pdf(st.session_state.cv_data)
+                st.download_button(
+                    label="📥 Download Your Professional CV",
+                    data=pdf_bytes,
+                    file_name=f"{data['personal_info'].get('name', 'CV').replace(' ', '_')}_CV.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error(f"An unexpected error occurred: {e}")
+
+with col2:
+    if job_description:
+        if st.button("✍️ Generate Cover Letter", use_container_width=True):
+            with st.spinner("Generating your cover letter..."):
+                # Extract resume text from the session state
+                resume_text = ""
+                if st.session_state.cv_data:
+                    # You might need to adjust this part depending on how your resume data is structured
+                    resume_text = f"""
+                    Personal Info: {st.session_state.cv_data.get('personal_info', {})}
+                    Summary: {st.session_state.cv_data.get('summary', '')}
+                    Experience: {st.session_state.cv_data.get('experience', [])}
+                    Projects: {st.session_state.cv_data.get('projects', [])}
+                    Achievements: {st.session_state.cv_data.get('achievements', [])}
+                    Education: {st.session_state.cv_data.get('education', [])}
+                    Skills: {st.session_state.cv_data.get('skills', [])}
+                    """  # Construct resume text
+                cover_letter = generate_cover_letter(resume_text, job_description)
+                if cover_letter:
+                    st.text_area("Cover Letter", value=cover_letter, height=300)
+                    st.download_button(
+                        label="📥 Download Cover Letter",
+                        data=cover_letter.encode(),
+                        file_name=f"{data['personal_info'].get('name', 'Cover_Letter').replace(' ', '_')}_Cover_Letter.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                else:
+                    st.error("Failed to generate cover letter.")
